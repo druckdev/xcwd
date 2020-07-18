@@ -74,7 +74,7 @@ static Window focusedWindow()
         exit(EXIT_FAILURE);
     XGetInputFocus (dpy, &focuswin, (int[1]){});
     root = XDefaultRootWindow(dpy);
-    if(root == focuswin)
+    if (root == focuswin)
         return None;
 
     do {
@@ -91,7 +91,7 @@ static Window focusedWindow()
             return 0;
         XQueryTree(dpy, focuswin, &root, &focuswin, &children, &nchildren);
         LOG("%s", "Current window does not have WM_STATE, getting parent\n");
-    } while(focuswin != root);
+    } while (focuswin != root);
 
     return 0;
 }
@@ -204,15 +204,15 @@ static processes_t getProcesses(void)
     p->n = count;
 
     unsigned int i;
-    for(i = 0; i < count; ++i) {
+    for (i = 0; i < count; ++i) {
         struct kinfo_file *files, *kif;
         int cnt, j;
-        if(kp[i].ki_fd == NULL || kp[i].ki_pid == 0)
+        if (kp[i].ki_fd == NULL || kp[i].ki_pid == 0)
             continue;
         files = kinfo_getfile(kp[i].ki_pid, &cnt);
-        for(j = 0; j < cnt; ++j) {
+        for (j = 0; j < cnt; ++j) {
             kif = &files[j];
-            if(kif->kf_fd != KF_FD_TYPE_CWD)
+            if (kif->kf_fd != KF_FD_TYPE_CWD)
                 continue;
             p->ps[i].pid = kp[i].ki_pid;
             p->ps[i].ppid = kp[i].ki_ppid;
@@ -241,7 +241,7 @@ static processes_t getProcesses(void)
     p->n = count;
 
     unsigned int i;
-    for(i = 0; i < count; ++i) {
+    for (i = 0; i < count; ++i) {
         struct kinfo_proc *kip = &kp[i];
         p->ps[i].pid = kip->p_pid;
         p->ps[i].ppid = kip->p_ppid;
@@ -264,21 +264,21 @@ static int readPath(struct proc_s *proc)
     snprintf(path, sizeof(path), "/proc/%ld/cwd", proc->pid);
     if ((len = readlink(path, buf, 255)) != -1)
         buf[len] = '\0';
-    if(len <= 0) {
+    if (len <= 0) {
         LOG("Error readlink %s\n", path);
         return 0;
     }
     LOG("Read %s\n", path);
-    if(access(buf, F_OK))
+    if (access(buf, F_OK))
         return 0;
     fprintf(stdout, "%s\n", buf);
 #endif
 #if defined(FREEBSD)
-    if(!strlen(proc->cwd)) {
+    if (!strlen(proc->cwd)) {
         LOG("%ld cwd is empty\n", proc->pid);
         return 0;
     }
-    if(access(proc->cwd, F_OK))
+    if (access(proc->cwd, F_OK))
         return 0;
     fprintf(stdout, "%s\n", proc->cwd);
 #endif
@@ -290,7 +290,7 @@ static int readPath(struct proc_s *proc)
         if(access(cwd, F_OK))
              return 0;
     } else
-	return 0;
+        return 0;
     fprintf(stdout, "%s\n", cwd);
 #endif
     return 1;
@@ -303,23 +303,23 @@ static int cwdOfDeepestChild(processes_t p, long pid)
                   *res = NULL, *lastRes = NULL;
 
     do {
-        if(res) {
+        if (res) {
             lastRes = res;
             key.ppid = res->pid;
         }
         res = (struct proc_s *)bsearch(&key, p->ps, p->n,
                 sizeof(struct proc_s), ppidCmp);
-    } while(res);
+    } while (res);
 
-    if(!lastRes) {
+    if (!lastRes) {
         return readPath(&key);
     }
 
-    for(i = 0; lastRes != p->ps && (lastRes - i)->ppid == lastRes->ppid; ++i)
-        if(readPath((lastRes - i)))
+    for (i = 0; lastRes != p->ps && (lastRes - i)->ppid == lastRes->ppid; ++i)
+        if (readPath((lastRes - i)))
             return 1;
-    for(i = 1; lastRes != p->ps + p->n && (lastRes + i)->ppid == lastRes->ppid; ++i)
-        if(readPath((lastRes + i)))
+    for (i = 1; lastRes != p->ps + p->n && (lastRes + i)->ppid == lastRes->ppid; ++i)
+        if (readPath((lastRes + i)))
             return 1;
     return 0;
 }
@@ -345,9 +345,9 @@ int main(int argc, const char *argv[])
 
     pid = windowPid(w);
     p = getProcesses();
-    if(!p)
+    if (!p)
         return getHomeDirectory();
-    if(pid != -1)
+    if (pid != -1)
         qsort(p->ps, p->n, sizeof(struct proc_s), ppidCmp);
     else {
         long unsigned int size;
@@ -357,12 +357,12 @@ int main(int argc, const char *argv[])
 
         qsort(p->ps, p->n, sizeof(struct proc_s), nameCmp);
         strings = windowStrings(w, &size, "WM_CLASS");
-        for(i = 0; i < size; i += strlen(strings + i) + 1) {
+        for (i = 0; i < size; i += strlen(strings + i) + 1) {
             LOG("pidof %s\n", strings + i);
             strcpy(key.name, strings + i);
             res = (struct proc_s *)bsearch(&key, p->ps, p->n,
                     sizeof(struct proc_s), nameCmp);
-            if(res)
+            if (res)
                 break;
         }
         if (res) {
