@@ -48,6 +48,7 @@ Installation
 * Clone this repository or [download as ZIP](https://github.com/schischi/xcwd/archive/master.zip)
 * `make`
 * `make install`
+
 Use `gmake` on OpenBSD.
 
 Running xwcd
