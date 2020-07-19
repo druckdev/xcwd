@@ -1,4 +1,4 @@
-CFILES=xcwd.c
+CFILES=xcwdlib.c xcwd.c
 CC=gcc
 CFLAGS=-Wall -Wextra -std=gnu99 -O2
 LDFLAGS=-lX11
