@@ -355,13 +355,17 @@ int xcwd(char *buf, size_t buflen)
     long pid;
     int ret = EXIT_SUCCESS;
     Window w = focusedWindow();
-    if (w == None)
+    if (w == None) {
+        XCloseDisplay(dpy);
         return getHomeDirectory(buf, buflen);
+    }
 
     pid = windowPid(w);
     p = getProcesses();
-    if (!p)
+    if (!p) {
+        XCloseDisplay(dpy);
         return getHomeDirectory(buf, buflen);
+    }
     if (pid != -1)
         qsort(p->ps, p->n, sizeof(struct proc_s), ppidCmp);
     else {
@@ -389,6 +393,7 @@ int xcwd(char *buf, size_t buflen)
     }
     if (pid == -1 || !cwdOfDeepestChild(p, pid, buf, buflen))
         ret = getHomeDirectory(buf, buflen);
+    XCloseDisplay(dpy);
     freeProcesses(p);
     return ret;
 }
