@@ -3,6 +3,6 @@
 
 #include <stddef.h>
 
-int xcwd(char *buf, size_t buflen);
+int xcwd(char *buf, size_t *buflen);
 
 #endif // XCWD_H

@@ -20,7 +20,8 @@ int main(int argc, const char *argv[])
 #endif
 
     char buf[buflen];
-    int ret = xcwd(buf, buflen);
-    fprintf(stdout, "%s\n", buf);
+    int ret = xcwd(buf, &buflen);
+    if (buflen)
+        fprintf(stdout, "%s\n", buf);
     return ret;
 }

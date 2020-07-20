@@ -254,61 +254,70 @@ static processes_t getProcesses(void)
     return p;
 }
 
-static int readPath(struct proc_s *proc, char *buf, size_t buflen)
+static int readPath(struct proc_s *proc, char *buf, size_t *buflen)
 {
 #ifdef LINUX
     char path[64];
     ssize_t len;
 
     snprintf(path, sizeof(path), "/proc/%ld/cwd", proc->pid);
-    if ((len = readlink(path, buf, buflen)) != -1)
-        buf[len - (len >= buflen)] = '\0';
+    if ((len = readlink(path, buf, *buflen)) != -1)
+        buf[len - (len >= *buflen)] = '\0';
     if (len <= 0) {
         LOG("Error readlink %s\n", path);
+        *buflen = 0;
         return 0;
     }
-    if (len >= buflen) {
+    if (len >= *buflen) {
         LOG("%s", "Error readlink: Buffer to small.\n");
+        *buflen = 0;
         return 0;
     }
     LOG("Read %s\n", path);
-    if (access(buf, F_OK))
+    if (access(buf, F_OK)) {
+        LOG("Error access %s\n", buf);
+        *buflen = 0;
         return 0;
+    }
+    *buflen = len + 1;
 #endif
 #if defined(FREEBSD)
     size_t cwdlen = strlen(proc->cwd);
     if (!cwdlen) {
         LOG("%ld cwd is empty\n", proc->pid);
+        *buflen = 0;
         return 0;
     }
-    if (cwdlen >= buflen) {
+    if (cwdlen >= *buflen) {
         LOG("%s", "Error copying cwd: Buffer to small.\n");
+        *buflen = 0;
         return 0;
     }
     if (access(proc->cwd, F_OK)) {
         LOG("Error access %s\n", proc->cwd);
+        *buflen = 0;
         return 0;
     }
-    strncpy(buf, proc->cwd, buflen - 1);
-    if (buflen > 0)
-        buf[buflen - 1] = '\0';
+    strncpy(buf, proc->cwd, cwdlen + 1);
+    *buflen = cwdlen + 1;
 #endif
 #if defined(OPENBSD)
     int name[3] = { CTL_KERN, KERN_PROC_CWD, proc->pid };
-    size_t len = buflen;
-    if (sysctl(name, 3, buf, &len, NULL, 0)) {
+    if (sysctl(name, 3, buf, buflen, NULL, 0)) {
         LOG("%s", "Error sysctl.\n")
+        *buflen = 0;
         return 0
     }
     if (access(buf, F_OK)) {
         LOG("Error access %s\n", buf);
+        *buflen = 0;
         return 0;
     }
 #endif
     return 1;
 }
 
-static int cwdOfDeepestChild(processes_t p, long pid, char *buf, size_t buflen)
+static int cwdOfDeepestChild(processes_t p, long pid, char *buf, size_t *buflen)
 {
     int i;
     struct proc_s key = { .pid = pid, .ppid = pid},
@@ -336,18 +345,24 @@ static int cwdOfDeepestChild(processes_t p, long pid, char *buf, size_t buflen)
     return 0;
 }
 
-int getHomeDirectory(char *buf, size_t buflen)
+int getHomeDirectory(char *buf, size_t *buflen)
 {
     LOG("%s", "getenv $HOME...\n");
-    strncpy(buf, getenv("HOME"), buflen - 1);
-    if (buflen > 0)
-        buf[buflen - 1] = '\0';
+    char *homedir = getenv("HOME");
+    size_t len = strlen(homedir) + 1;
+    if (len > *buflen) {
+        LOG("%s", "Error copying $HOME: Buffer to small.\n");
+        len = 0;
+    } else {
+        strncpy(buf, homedir, len);
+    }
+    *buflen = len;
     return EXIT_FAILURE;
 }
 
-int xcwd(char *buf, size_t buflen)
+int xcwd(char *buf, size_t *buflen)
 {
-    if (!buf || !buflen) {
+    if (!buf || !buflen || !*buflen) {
         LOG("%s", "Error: Invalid buffer.\n");
         return EXIT_FAILURE;
     }
