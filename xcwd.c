@@ -254,49 +254,61 @@ static processes_t getProcesses(void)
     return p;
 }
 
-static int readPath(struct proc_s *proc)
+static int readPath(struct proc_s *proc, char *buf, size_t buflen)
 {
 #ifdef LINUX
-    char buf[255];
     char path[64];
     ssize_t len;
 
     snprintf(path, sizeof(path), "/proc/%ld/cwd", proc->pid);
-    if ((len = readlink(path, buf, 255)) != -1)
-        buf[len] = '\0';
+    if ((len = readlink(path, buf, buflen)) != -1)
+        buf[len - (len >= buflen)] = '\0';
     if (len <= 0) {
         LOG("Error readlink %s\n", path);
+        return 0;
+    }
+    if (len >= buflen) {
+        LOG("%s", "Error readlink: Buffer to small.\n");
         return 0;
     }
     LOG("Read %s\n", path);
     if (access(buf, F_OK))
         return 0;
-    fprintf(stdout, "%s\n", buf);
 #endif
 #if defined(FREEBSD)
-    if (!strlen(proc->cwd)) {
+    size_t cwdlen = strlen(proc->cwd);
+    if (!cwdlen) {
         LOG("%ld cwd is empty\n", proc->pid);
         return 0;
     }
-    if (access(proc->cwd, F_OK))
+    if (cwdlen >= buflen) {
+        LOG("%s", "Error copying cwd: Buffer to small.\n");
         return 0;
-    fprintf(stdout, "%s\n", proc->cwd);
+    }
+    if (access(proc->cwd, F_OK)) {
+        LOG("Error access %s\n", proc->cwd);
+        return 0;
+    }
+    strncpy(buf, proc->cwd, buflen - 1);
+    if (buflen > 0)
+        buf[buflen - 1] = '\0';
 #endif
 #if defined(OPENBSD)
-    char cwd[PATH_MAX];
     int name[3] = { CTL_KERN, KERN_PROC_CWD, proc->pid };
-    size_t len = sizeof(cwd);
-    if (sysctl(name, 3, cwd, &len, NULL, 0) == 0) {
-        if(access(cwd, F_OK))
-             return 0;
-    } else
+    size_t len = buflen;
+    if (sysctl(name, 3, buf, &len, NULL, 0)) {
+        LOG("%s", "Error sysctl.\n")
+        return 0
+    }
+    if (access(buf, F_OK)) {
+        LOG("Error access %s\n", buf);
         return 0;
-    fprintf(stdout, "%s\n", cwd);
+    }
 #endif
     return 1;
 }
 
-static int cwdOfDeepestChild(processes_t p, long pid)
+static int cwdOfDeepestChild(processes_t p, long pid, char *buf, size_t buflen)
 {
     int i;
     struct proc_s key = { .pid = pid, .ppid = pid},
@@ -312,41 +324,44 @@ static int cwdOfDeepestChild(processes_t p, long pid)
     } while (res);
 
     if (!lastRes) {
-        return readPath(&key);
+        return readPath(&key, buf, buflen);
     }
 
     for (i = 0; lastRes != p->ps && (lastRes - i)->ppid == lastRes->ppid; ++i)
-        if (readPath((lastRes - i)))
+        if (readPath((lastRes - i), buf, buflen))
             return 1;
     for (i = 1; lastRes != p->ps + p->n && (lastRes + i)->ppid == lastRes->ppid; ++i)
-        if (readPath((lastRes + i)))
+        if (readPath((lastRes + i), buf, buflen))
             return 1;
     return 0;
 }
 
-int getHomeDirectory()
+int getHomeDirectory(char *buf, size_t buflen)
 {
     LOG("%s", "getenv $HOME...\n");
-    fprintf(stdout, "%s\n", getenv("HOME"));
+    strncpy(buf, getenv("HOME"), buflen - 1);
+    if (buflen > 0)
+        buf[buflen - 1] = '\0';
     return EXIT_FAILURE;
 }
 
-int main(int argc, const char *argv[])
+int xcwd(char *buf, size_t buflen)
 {
-    (void)argc;
-    (void)argv;
-
+    if (!buf || !buflen) {
+        LOG("%s", "Error: Invalid buffer.\n");
+        return EXIT_FAILURE;
+    }
     processes_t p;
     long pid;
     int ret = EXIT_SUCCESS;
     Window w = focusedWindow();
     if (w == None)
-        return getHomeDirectory();
+        return getHomeDirectory(buf, buflen);
 
     pid = windowPid(w);
     p = getProcesses();
     if (!p)
-        return getHomeDirectory();
+        return getHomeDirectory(buf, buflen);
     if (pid != -1)
         qsort(p->ps, p->n, sizeof(struct proc_s), ppidCmp);
     else {
@@ -372,9 +387,30 @@ int main(int argc, const char *argv[])
         if (size)
             free(strings);
     }
-    if (pid == -1 || !cwdOfDeepestChild(p, pid))
-        ret = getHomeDirectory();
+    if (pid == -1 || !cwdOfDeepestChild(p, pid, buf, buflen))
+        ret = getHomeDirectory(buf, buflen);
     freeProcesses(p);
     return ret;
 }
 
+int main(int argc, const char *argv[])
+{
+    (void)argc;
+    (void)argv;
+
+    size_t buflen = 1;
+#ifdef LINUX
+    buflen = 255;
+#endif
+#ifdef FREEBSD
+    buflen = PATH_MAX;
+#endif
+#ifdef OPENBSD
+    buflen = PATH_MAX;
+#endif
+
+    char buf[buflen];
+    int ret = xcwd(buf, buflen);
+    fprintf(stdout, "%s\n", buf);
+    return ret;
+}
